@@ -83,45 +83,6 @@ It brings real robotics actuator technology to every maker and student, at an ac
 | Size          | MG996R compatible |
 | Safety        | Stall protection, current limiting |
 
----
-
-# 🏗 Repository Structure
-
-OXiDrive/
-├── docs/ # Diagrams, mockups, architecture notes
-│
-├── hardware/ # Schematics, PCBs, BOM
-│ ├── schematics/
-│ ├── pcb_layout/
-│ └── bom.csv
-│
-├── firmware/ # STM32-based FOC firmware
-│ ├── Core/
-│ ├── Drivers/
-│ ├── FOC/
-│ ├── Encoder/
-│ └── Examples/
-│
-├── mechanical/ # CAD models for casing and gearboxes
-│ ├── stl/
-│ ├── step/
-│ └── drawings/
-│
-├── software/ # GUI tools (desktop/web) for tuning
-│ ├── tuning_gui/
-│ └── calibration_tool/
-│
-├── examples/ # Usage demos with Arduino/ESP32
-│ ├── arduino_pwm_control/
-│ ├── esp32_uart_control/
-│ └── quadruped_leg_demo/
-│
-└── README.md
-
-yaml
-Copy code
-
----
 
 # 🚀 Development Roadmap
 
@@ -130,7 +91,6 @@ Copy code
 ### 🟧 Phase 3 — OXiDrive PCB Rev 1  
 ### 🟧 Phase 4 — FOC Firmware (Torque + Velocity + Position)  
 ### 🟧 Phase 5 — BLDC Smart Servo Prototype V1  
-### ☐ Phase 6 — MG996R-compatible Casing + Gearbox V1  
 ### ☐ Phase 7 — Campus Test Kits  
 ### ☐ Phase 8 — OXiDrive Smart Servo V2 (CAN Bus)  
 
@@ -160,29 +120,6 @@ OXiDrive is designed to **teach**:
 
 Our goal is to bring modern robotics technology into Indian campuses where it is currently missing.
 
----
-
-# 🤝 Contributing
-
-We welcome contributions in:
-- Firmware (STM32, FOC loops)  
-- Hardware (gates, sensing, PCB)  
-- Mechanical (servo casing, gearbox)  
-- Software tools (GUI, tuning apps)  
-- Documentation / examples  
-
-Fork the repo → open a PR → join the movement.
-
----
-
-# 👤 Author
-
-**Parag Patil**  
-Mechatronics Engineer • Robotics Developer  
-Creator of **Rollopod** & **OXiDrive**  
-Building robotics hardware for the next generation.
-
----
 
 # 🌟 Vision Statement
 
