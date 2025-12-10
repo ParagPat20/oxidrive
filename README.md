@@ -10,6 +10,9 @@
 If you can control an MG996R, you can control OXiDrive —  
 but now you get **smoothness, torque, precision, and durability** at a whole new level.
 
+<!-- Concept sketch showing the OXiDrive BLDC system and campus use cases -->
+![OXiDrive on Campus](OXiDrive_on_Campus.png)
+
 OXiDrive is built for:
 - Hexapods  
 - Quadrupeds  
