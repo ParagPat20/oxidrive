@@ -1,112 +1,216 @@
-# 🌀 OXiDrive — BLDC Smart Servo Actuator
+# 🌀 OXiDrive — Modular Smart Actuator Platform
 
-> **Drop-in replacement for hobby servos. Real FOC. Real torque. Real robotics.**
+> **Round. Chainable. Wireless-ready. FOC-controlled. Built for real robotics.**
 
-**OXiDrive** is an open-source, STM32-based BLDC servo actuator with Field-Oriented Control (FOC) and magnetic encoder feedback. It is designed to fit standard hobby servo mounting patterns while delivering the performance and control modes demanded by modern robotics.
+**OXiDrive** is an open-source modular smart actuator platform built around a **5010 BLDC motor** with a **cycloidal / harmonic / planetary gearbox**, housed in a **black anodized aluminium round enclosure**, controlled by an onboard **STM32G4 FOC controller** with absolute magnetic encoder feedback.
+
+Actuators daisy-chain via circular **CAN Bus + Power connectors** for clean, scalable wiring. A dedicated **ESP32-based Wireless Bridge Module** sits at the head of the chain to deliver wireless command translation from the main robot controller — no wireless hardware required inside each actuator node.
+
+---
+
+## Concept & Vision
+
+![OXiDrive Single Actuator Concept](robot%20actuator%20concept.jpg)
+*OXiDrive actuator node — black anodized round housing, integrated gearbox, onboard FOC controller, chain connectors*
+
+![OXiDrive Modular Chain Architecture](modular%20actuator%20concept.jpg)
+*Modular distributed actuator network — ESP32 wireless bridge gateway → CAN chain → N identical actuator nodes*
 
 ---
 
 ## Why OXiDrive?
 
-Hobby servo motors (MG996R, DS3218, etc.) are universally available but fundamentally limited:
+Modern high-performance actuators (Dynamixel Pro, Hebi Robotics, Moteus) cost **₹50,000–₹2,00,000** when imported and are entirely unavailable to most Indian students and makers. Hobby servos are cheap but fundamentally broken for real robotics:
 
 | Pain Point | Hobby Servo | OXiDrive |
 |---|---|---|
-| Control | Dumb PWM position only | Torque · Velocity · Position (FOC) |
-| Feedback | None (open-loop) | 12–14-bit magnetic encoder |
-| Smoothness | Jitter under load | Smooth, closed-loop FOC |
-| Stall behaviour | Coil burn / gear strip | Current-limited stall protection |
-| Torque range | 1–15 kg·cm | 10–30 kg·cm target |
-| Advanced interface | PWM only | PWM + UART + CAN (roadmap) |
-| Cost at performance | Cheap but limited | Accessible (made-in-India) |
+| Form factor | Rectangular, bulky | Compact round actuator (black anodized) |
+| Control | PWM position only (open-loop) | Torque · Velocity · Position (FOC, closed-loop) |
+| Feedback | None | 14-bit absolute magnetic encoder (output shaft) |
+| Torque quality | Jitter, dead-zones, gear-strip on stall | Smooth, stiff, current-controlled torque |
+| Communication | Single PWM wire | CAN Bus daisy-chain + UART + optional wireless |
+| Multi-actuator wiring | Rats-nest individual wiring | Single looped chain: power + CAN in one pass |
+| Wireless control | Not possible | ESP32 Wireless Bridge module at chain head |
+| Cost at performance | Cheap but limited | Accessible — made-in-India, open hardware |
 
-Imported equivalents (Dynamixel, ODrive-based actuators) cost **₹50,000–₹1,00,000**. OXiDrive targets a fraction of that cost with an accessible, educationally transparent design.
+---
+
+## System Architecture
+
+OXiDrive is a **two-part system**:
+
+```
+┌─────────────────────┐
+│  Main Robot         │
+│  Controller / PC    │
+└─────────┬───────────┘
+          │  Wi-Fi / BLE (wireless)
+          ▼
+┌─────────────────────┐
+│  OXiDrive Wireless  │
+│  Bridge (ESP32)     │  ◄── USB-C (flash / host debug)
+└─────────┬───────────┘
+          │  CAN Bus + Power (wired chain)
+          ▼
+┌──────────┐    ┌──────────┐    ┌──────────┐             ┌──────────┐
+│  Node 01 │───►│  Node 02 │───►│  Node 03 │───► ... ───►│  Node N  │
+└──────────┘    └──────────┘    └──────────┘             └──────────┘
+   ↑ CAN + Power daisy-chain via circular connectors (both sides)
+```
+
+### Part 1 — OXiDrive Actuator Node
+
+Each actuator is a fully self-contained intelligent module:
+
+- **5010 BLDC outrunner motor** — high torque density at low speed, designed for gearbox pairing
+- **Integrated gearbox** — cycloidal (zero backlash), harmonic (high reduction, compact), or planetary (cost-effective modular) selected at build time
+- **Black anodized aluminium round housing** — precision-machined, industrial finish, gearbox bolt-circle flange on output side
+- **STM32G4 onboard FOC controller** — Cortex-M4 with FPU, high-resolution timers for >40 kHz PWM switching
+- **AS5048A 14-bit absolute magnetic encoder** — mounted on the output shaft for true position sensing with no cumulative error
+- **DRV8323 3-phase gate driver** — integrated current sensing, SPI-configurable gain, hardware fault protection
+- **Chain connectors (both sides)** — single circular connector per side carries both CAN differential pair and power lines; enables a clean single-loop wiring pass through all joints
+
+**Connectors exposed per actuator:**
+
+| Connector | Type | Purpose |
+|---|---|---|
+| CAN In | Circular (chain) | CAN Bus + Power from upstream actuator or bridge |
+| CAN Out | Circular (chain) | CAN Bus + Power to downstream actuator |
+| UART | 3-pin header | Serial debug / direct single-unit control |
+| SWD Pads | PCB pads (5) | SWDIO, SWDCK, RESET, GND, 3.3V — ST-Link flashing and live debug (developer only) |
+
+No other connectors. No PWM. No external antenna. Clean.
+
+---
+
+### Part 2 — OXiDrive Wireless Bridge Module
+
+A standalone custom ESP32-based PCB that acts as the **CAN master and wireless gateway** at the head of the actuator chain.
+
+- **ESP32 chip options:**
+  - **ESP32-C6** *(recommended)* — Wi-Fi 6 + BLE 5 + Thread/Zigbee; lowest latency for real-time robot control
+  - **ESP32-S3** — Wi-Fi + BLE 5, dual-core; better for data-heavy telemetry or vision pipelines
+  - **ESP32-C3** — Wi-Fi + BLE 5, single-core low-cost; suitable for simple setups or development
+- **CAN transceiver** (SN65HVD230 or MCP2562) — bridges ESP32 TWAI peripheral to the actuator chain
+- **Power regulation** — accepts 12–24 V from chain power input; regulates to 3.3 V for ESP32
+- **USB-C** — host/flash port; also supports direct UART to CAN bridge via PC
+- **Custom PCB** — compact industrial layout; not a generic dev board
+
+The bridge connects to the first actuator in the chain over a wired CAN + Power cable. All downstream actuators communicate purely over CAN — **no wireless silicon inside any actuator node**.
 
 ---
 
 ## Target Specifications
 
+### Actuator Node
+
 | Parameter | Specification |
 |---|---|
-| Motor type | 3-phase BLDC (gimbal/outrunner class) |
-| Torque output | 10–30 kg·cm (gearbox-dependent) |
+| Motor | 5010 BLDC outrunner (3-phase) |
+| Gearbox | Cycloidal / harmonic / planetary (build variant) |
+| Gear ratio (target) | 6:1 – 36:1 depending on gearbox selection |
+| Torque output | 10–40 kg·cm (gearbox and ratio dependent) |
 | Operating voltage | 12–24 V |
-| Controller | STM32G4 series (ARM Cortex-M4, FPU) |
-| Gate driver | DRV8323 / FDMT80080 (3-phase) |
-| Encoder | AS5600 / AS5048A (12–14-bit magnetic) |
-| Gearbox | Optional planetary, 6:1 or 10:1 |
-| Control modes | Position, Velocity, Torque (FOC) |
-| Interfaces | PWM (servo-compat.), UART, CAN Bus (V2) |
-| Footprint | MG996R-compatible mounting pattern |
-| Firmware base | SimpleFOC (Arduino/PlatformIO) |
-| Protection | Over-current, stall detection, soft-start/stop |
+| Controller MCU | STM32G4 (Cortex-M4, FPU, HR timers) |
+| Gate driver | DRV8323RS (3-phase, integrated 3× current sensing) |
+| Encoder | AS5048A, 14-bit absolute, SPI |
+| Control modes | Position · Velocity · Torque (FOC, closed-loop) |
+| Communication | CAN 2.0B (daisy-chain) + UART |
+| CAN node ID | Configurable via UART command or hardware ID pads |
+| Firmware | SimpleFOC on STM32G4 (PlatformIO) |
+| Housing | Round, black anodized aluminium |
+| Termination | CAN termination resistor jumper on last node |
+| Protection | Over-current, stall detection, thermal shutdown, soft-start/stop |
 
-> **Note:** Specifications are prototype targets. Final values will be validated on hardware in Phase 4–5.
+### Wireless Bridge Module
+
+| Parameter | Specification |
+|---|---|
+| MCU | ESP32-C6 / S3 / C3 (variant-dependent) |
+| Wireless | Wi-Fi 6 + BLE 5 (C6) / Wi-Fi + BLE 5 (S3, C3) |
+| CAN interface | TWAI peripheral + SN65HVD230 or MCP2562 transceiver |
+| Power input | 12–24 V from chain connector or 5V via USB-C |
+| Power output | 3.3V regulated for ESP32; passes 12–24V to actuator chain |
+| Bus role | CAN master / gateway node |
+| Host interface | Wi-Fi, BLE, or USB-C UART |
+| Connectors | USB-C (flash/host) + CAN Out + Power Out to chain |
+
+> **Note:** All specifications are prototype targets. Values will be validated on hardware in Phases 5–6.
 
 ---
 
 ## Key Features
 
-### Hardware
-- 3-phase BLDC motor with optional planetary gearbox reduction (6:1 / 10:1)
-- AS5600 / AS5048A magnetic encoder — 12–14-bit absolute position sensing, no index pulse required
-- STM32G4-based controller — hardware floating-point, high-resolution timer for FOC PWM generation
-- DRV8323 3-phase gate driver — integrated current sensing, SPI-configurable gain
-- Standard MG996R bolt-hole pattern and connector pinout (5-pin: GND, 5V logic, PWM, TX, RX)
+### Actuator Hardware
+- **5010 BLDC** — large outrunner class; proven in drone/robotics applications; excellent torque-to-weight ratio when geared
+- **Gearbox options (build variants):**
+  - *Cycloidal:* Zero backlash, high shock resistance, compact; best for legged robots
+  - *Harmonic:* Highest reduction ratios (50:1–100:1) in smallest envelope; best for precision arms
+  - *Planetary:* Cost-effective, modular, well-understood; best for educational builds and arms
+- **AS5048A encoder on output shaft** — eliminates gearbox backlash error from position measurement; true output-side closed-loop control
+- **DRV8323RS gate driver** — hardware current sensing on all three phases; 8 V gate drive for fast MOSFET switching; SPI fault register
+- **STM32G4** — 170 MHz Cortex-M4 with FPU; HRTIM peripheral for sub-nanosecond FOC PWM dead-time control
+- **Circular chain connectors** — both sides of the housing; a single cable loop carries 12–24 V power **and** CAN differential pair through every joint in the chain
 
 ### Firmware
-- Field-Oriented Control via SimpleFOC library (ported to STM32G4 / PlatformIO)
-- Three operating modes selectable at boot or over UART:
-  - **Position mode** — servo-style angle control via PWM or UART command
+- Field-Oriented Control via SimpleFOC (ported to STM32G4 / PlatformIO)
+- Three operating modes — selectable via UART command or CAN packet:
+  - **Position mode** — closed-loop angle control with configurable PID + feedforward
   - **Velocity mode** — RPM setpoint with torque clamping
-  - **Torque mode** — direct current (torque) control for force-sensitive tasks
-- Auto-calibration: encoder zero-offset and pole-pair detection on first boot
-- Stall detection: current spike + zero-velocity watchdog → safe shutdown
-- Soft-start and soft-stop ramps to prevent mechanical shock
+  - **Torque mode** — direct current/torque control for compliant or force-sensitive joints
+- Auto-calibration on first boot: pole-pair detection, encoder zero offset, encoder direction
+- Stall detection: current spike + zero-velocity watchdog → safe controlled shutdown
+- Soft-start and soft-stop ramps to prevent mechanical shock on joints
+- CAN node ID configurable via UART; stored in onboard flash
 
-### Interfaces
-- **PWM** — standard 50 Hz, 1–2 ms pulse; maps to position mode (servo drop-in)
-- **UART** — binary packet protocol at 115200 baud; full mode switching and telemetry
-- **CAN Bus** *(V2 roadmap)* — multi-actuator bus for legged robots and arms
+### Connectivity
+- **CAN Bus (primary)** — multi-drop daisy-chain; each node is CAN-addressed; supports synchronised multi-axis setpoint commands
+- **UART** — single-unit debug, configuration, calibration, and direct control
+- **SWD pads** — 5 pads (SWDIO, SWDCK, RESET, GND, 3.3V) for ST-Link firmware flashing and GDB live debug; developer access only; not a user-facing connector
+- **Wireless** — via dedicated Wireless Bridge Module only; zero wireless hardware inside the actuator node
 
 ---
 
 ## Development Roadmap
 
 ```
-Phase 1  ✅  Concept & Architecture
-Phase 2  ✅  Documentation & Mockups
-Phase 3  🟧  PCB Design — Rev 1
-Phase 4  🟧  FOC Firmware Bring-up
-Phase 5  🟧  Hardware Integration & Bench Testing
-Phase 6  ☐   Closed-Loop Validation & Calibration Refinement
-Phase 7  ☐   Campus Alpha Kit (5–10 units, field testing)
-Phase 8  ☐   OXiDrive V2 — CAN Bus, refined PCB, production BOM
+Phase 1   ✅  Concept & Architecture
+Phase 2   ✅  Hardware Design Decisions & Documentation
+Phase 3   🟧  Actuator PCB Rev 1 (STM32G4 + DRV8323 + AS5048A + CAN)
+Phase 4   🟧  FOC Firmware Bring-up (spin, calibrate, close all loops)
+Phase 5   🟧  Mechanical Integration (5010 + gearbox + housing + connectors)
+Phase 6   ☐   Closed-Loop Validation & Performance Characterisation
+Phase 7   ☐   Wireless Bridge Module (ESP32 PCB + CAN gateway firmware)
+Phase 8   ☐   Full System Integration (multi-node chain + wireless end-to-end)
+Phase 9   ☐   Campus Alpha Kit (5–10 assembled systems + 1 bridge per kit)
+Phase 10  ☐   OXiDrive V2 (CANFD, miniaturised PCB, final gearbox, production BOM)
 ```
 
 ### Phase Details
 
-| Phase | Status | Description |
+| Phase | Status | Deliverable |
 |---|---|---|
-| 1 — Concept | ✅ Done | Motor topology selection, controller choice (STM32G4), control mode architecture |
-| 2 — Documentation | ✅ Done | README, block diagrams, component selection rationale, BOM draft |
-| 3 — PCB Rev 1 | 🟧 Active | 4-layer PCB: power stage (DRV8323 + MOSFETs), STM32G4 MCU, encoder header, UART/CAN |
-| 4 — Firmware | 🟧 Active | SimpleFOC port to STM32G4, closed-loop position/velocity/torque modes, UART protocol |
-| 5 — Bench Testing | 🟧 Active | Motor spin-up, encoder calibration, back-EMF tuning, thermal characterisation |
-| 6 — Validation | ☐ Planned | Load-cell torque measurement, step-response plots, stall/over-current trip testing |
-| 7 — Campus Kits | ☐ Planned | 5–10 assembled units for external makers, feedback loop, curriculum material |
-| 8 — V2 Release | ☐ Planned | CAN Bus node support, improved thermal pad, reduced BOM cost, miniaturised form-factor |
+| 1 — Concept | ✅ Done | Motor (5010 BLDC), controller (STM32G4), form factor (round chain), gearbox selection rationale |
+| 2 — Documentation | ✅ Done | README, architecture diagrams, component rationale, BOM draft |
+| 3 — Actuator PCB | 🟧 Active | 4-layer KiCad PCB: DRV8323 power stage, STM32G4, AS5048A SPI, UART, CAN transceiver, SWD pads |
+| 4 — FOC Firmware | 🟧 Active | SimpleFOC on STM32G4: motor spin, encoder calibration, position/velocity/torque loops, CAN node |
+| 5 — Mechanical | 🟧 Active | 5010 motor mount, gearbox integration, round housing STEP files, circular connector mounting |
+| 6 — Validation | ☐ Planned | Load-cell torque measurements, step-response characterisation, stall/over-current trip, thermal profiling |
+| 7 — Wireless Bridge | ☐ Planned | ESP32 custom PCB, Wi-Fi/BLE host interface, CAN gateway firmware, protocol translation testing |
+| 8 — System Integration | ☐ Planned | End-to-end chain test: wireless host → bridge → 3+ nodes via CAN; synchronised multi-axis control |
+| 9 — Campus Alpha | ☐ Planned | 5–10 assembled actuator systems + 1 wireless bridge per kit; external maker feedback loop |
+| 10 — V2 Release | ☐ Planned | CANFD support, miniaturised PCB, final gearbox selection, reduced BOM cost, public open hardware release |
 
 ---
 
 ## Example Applications
 
-- **Legged robots** — quadrupeds and hexapods requiring fast, smooth, torque-aware joints
-- **Robotic arms** — 4–6 DOF manipulators with gravity compensation via torque mode
-- **Animatronics** — smooth and silent actuation for expressive joints
-- **Gimbal mechanisms** — velocity-mode control for stabilised camera platforms
-- **Research platforms** — force-controlled experiments requiring calibrated torque output
-- **Educational kits** — teach BLDC physics, FOC algorithms, embedded motor control
+- **Legged robots** — quadrupeds and hexapods with torque-controlled, back-drivable joints; CAN chain maps cleanly to limb topology
+- **Robotic arms** — 4–7 DOF manipulators with gravity compensation and force sensing via torque mode
+- **Humanoids** — high-torque joints in a compact round form factor chainable across the entire structure
+- **Animatronics** — smooth, silent, precise joint actuation with wireless operation via bridge
+- **Research platforms** — force-controlled experiments requiring calibrated, transparent torque output
+- **Educational kits** — hands-on learning for BLDC physics, FOC, CAN Bus, and embedded motor control
 
 ---
 
@@ -115,59 +219,80 @@ Phase 8  ☐   OXiDrive V2 — CAN Bus, refined PCB, production BOM
 ```
 oxidrive/
 ├── hardware/
-│   ├── pcb/            # KiCad schematic + PCB layout (Rev 1)
-│   ├── mechanical/     # STEP/STL files, MG996R mounting adapter
-│   └── bom/            # Component BOM (LCSC, JLCPCB)
+│   ├── actuator-pcb/       # KiCad schematic + PCB for actuator node (Rev 1)
+│   ├── wireless-bridge/    # KiCad schematic + PCB for ESP32 bridge module
+│   ├── mechanical/         # STEP/STL: round housing, gearbox interface, connector mount
+│   └── bom/                # Component BOM (LCSC / JLCPCB compatible)
 ├── firmware/
-│   ├── src/            # SimpleFOC-based STM32G4 firmware
-│   ├── platformio.ini
-│   └── config/         # Motor & encoder calibration config headers
+│   ├── actuator/           # STM32G4 FOC firmware (SimpleFOC / PlatformIO)
+│   │   ├── src/
+│   │   ├── platformio.ini
+│   │   └── config/         # Motor params, encoder config, CAN node ID
+│   └── wireless-bridge/    # ESP32 Wi-Fi/BLE to CAN gateway firmware
+│       ├── src/
+│       └── platformio.ini
 ├── docs/
-│   ├── wiring.md       # Pinout, power wiring diagram
-│   ├── uart-protocol.md
-│   └── calibration.md
+│   ├── architecture.md     # System architecture, block diagrams
+│   ├── can-protocol.md     # CAN packet format, node IDs, command set
+│   ├── uart-protocol.md    # UART command set for direct control/debug
+│   ├── wiring.md           # Power and CAN chain wiring guide
+│   └── calibration.md      # Encoder and FOC calibration procedure
 └── README.md
 ```
 
 ---
 
-## Getting Started *(after Phase 4)*
+## Getting Started *(after Phase 4–5)*
 
-1. **Flash firmware** using ST-Link V2 and PlatformIO
-2. **Connect encoder** (AS5600 via I²C on PA8/PA9)
-3. **Power up** at 12–24 V through the JST-PH power connector
-4. **Calibrate** — send `CAL\n` over UART; motor will spin one pole-pair cycle and lock encoder zero
-5. **Control** via PWM (servo mode, no changes to your existing code) or UART commands
+### Single Actuator — Wired UART
+1. Flash firmware via **ST-Link V2** on the SWD pads using PlatformIO
+2. Connect **UART** (TX, RX, GND) to your PC or microcontroller at 115200 baud
+3. Power the actuator at **12–24 V** via the chain power connector
+4. Send `CAL\n` over UART — motor spins one pole-pair cycle and locks encoder zero
+5. Send mode and setpoint commands over UART to control position, velocity, or torque
+
+### Multi-Actuator Chain — Wired CAN
+1. Flash each actuator with a unique **CAN node ID**: send `NODEID x\n` over UART
+2. Daisy-chain actuators: **CAN Out → CAN In**, **Power Out → Power In** via the circular chain connectors
+3. Place the **CAN termination jumper** on the last actuator in the chain
+4. Send CAN packets from your host (or the wireless bridge) to address individual or all nodes
+
+### Wireless Setup — Bridge Module
+1. Flash the **ESP32 wireless bridge** via USB-C
+2. Configure Wi-Fi SSID/password via USB serial on first boot
+3. Connect **bridge CAN Out + Power Out** to the first actuator's CAN In + Power In
+4. Connect your host PC or robot controller over **Wi-Fi / BLE** and send commands through the bridge
 
 ---
 
 ## Educational Mission
 
-OXiDrive is designed to be fully transparent — every design decision is documented so students can learn:
+OXiDrive is fully transparent by design — every architectural decision is documented so students can learn:
 
-- BLDC motor physics (back-EMF, Kv, pole pairs)
-- Space-vector PWM and Field-Oriented Control (FOC) mathematics
-- Absolute magnetic encoder integration (I²C / SPI, hall effect)
-- 3-phase gate driver design (bootstrap circuitry, dead-time)
-- Embedded motor control firmware (control loops, interrupts, timers)
-- Robotics motion planning (position, velocity, torque modes)
+- **BLDC motor physics** — Kv, back-EMF, pole pairs, three-phase commutation
+- **Field-Oriented Control (FOC)** — Clarke/Park transforms, space-vector PWM, PID loop tuning
+- **Absolute magnetic encoder** — AS5048A via SPI, interpolation, offset calibration, output-shaft sensing
+- **3-phase gate driver design** — DRV8323, bootstrap circuitry, dead-time control, current sensing topology
+- **CAN Bus fundamentals** — arbitration, node addressing, packet structure, daisy-chain topology
+- **Wireless protocol bridging** — ESP32 TWAI peripheral, Wi-Fi/BLE to CAN translation, gateway design
+- **Gearbox mechanical design** — cycloidal vs. harmonic vs. planetary trade-offs in real applications
 
 ---
 
 ## License
 
 - **Firmware:** MIT License
-- **Hardware (PCB, Schematics):** CERN Open Hardware Licence v2 — Permissive (CERN-OHL-P)
+- **Hardware (PCB, Schematics, Mechanical files):** CERN Open Hardware Licence v2 — Permissive (CERN-OHL-P)
 
 ---
 
 ## Vision
 
-> *OXiDrive aims to be India's first open smart-actuator platform —*
+> *OXiDrive aims to be India's first open modular smart-actuator platform —*
 > *empowering students, makers, and robotics teams to build world-class robots at an accessible cost.*
 
 ---
 
-**Current Status:** Phases 3–5 in parallel (PCB layout + firmware bringup + bench testing)
+**Current Status:** Phases 3–5 running in parallel — actuator PCB layout · FOC firmware bringup · mechanical housing integration
 
 *Contributions, feedback, and campus partnerships welcome.*
