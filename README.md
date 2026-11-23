@@ -1,4 +1,4 @@
-# 🌀 OXiDrive – The Next Evolution of Servo Motors  
+# 🌀 OxiDrive – The Next Evolution of Servo Motors  
 ### **BLDC Smart Servo System • FOC Controlled • Encoder Feedback • Plug-and-Play Simplicity**
 
 ---
